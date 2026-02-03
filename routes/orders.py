@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 import crud
 from database import get_db
 from schemas import OrderCreate, OrderResponse
+from rabbitmq.producer import publish_order
+
 
 router = APIRouter(
     prefix="/orders",
@@ -11,8 +13,18 @@ router = APIRouter(
 
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 def create_order(order: OrderCreate, db: Session = Depends(get_db)):
-    new_order = crud.create_order(db, order)
-    return new_order
+
+    db_order = crud.create_order(db, order)
+
+    # Send message to RabbitMQ
+    publish_order({
+        "order_id": db_order.id,
+        "item_name": db_order.item_name,
+        "quantity": db_order.quantity
+    })
+
+    return db_order
+
 
 @router.get("/", response_model = list[OrderResponse])
 def get_orders(db: Session = Depends(get_db)):
